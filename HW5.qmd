@@ -1,0 +1,361 @@
+---
+title: "HW5"
+author: "Chris Hill"
+format: html
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+# Task 1: Read in the Data and Modify
+
+Read in the data from a local file source and combine the two data frames
+
+```{r}
+d1 <- read.table("student-mat.csv",sep=";",header=TRUE)
+d2 <- read.table("student-por.csv",sep=";",header=TRUE)
+
+merge_cols <- c("school","sex","age","address","famsize","Pstatus",
+                "Medu","Fedu","Mjob","Fjob","reason","nursery",
+                "internet")
+
+their_way <- merge(d1, d2, 
+                   by = merge_cols)
+
+print(nrow(their_way)) # 382 students
+```
+
+Read in and combine the data using functions from the tidyverse. Use an inner_join() on the variables they used in their code
+
+```{r}
+#| message: false
+
+library(tidyverse)
+
+mat_data <- read_csv2("student-mat.csv", col_names = TRUE)
+por_data <- read_csv2("student-por.csv", col_names = TRUE)
+
+using_inner_join <- inner_join(mat_data, por_data, by = merge_cols)
+
+print(nrow(using_inner_join))
+```
+
+Use an inner_join() on all variables other than G1, G2, G3, paid, and absences
+
+```{r}
+all_cols <- colnames(mat_data)
+merge_cols <- setdiff(all_cols, 
+                      c("G1", "G2", "G3", "paid", "absences"))
+
+combined_data <- inner_join(mat_data, por_data, by = merge_cols)
+
+print(nrow(combined_data))
+```
+
+For the math data, Portuguese, and combined data, choose four categorical variables you are interested in and convert those into factor variables in each tibble. Use Mutate()
+
+```{r}
+coerce_interested_factors <- function(data) {
+  data |>
+    mutate(reason = factor(reason),
+           studytime = factor(studytime),
+           romantic = factor(romantic),
+           schoolsup = factor(schoolsup))
+}
+
+mat_data <- coerce_interested_factors(mat_data)
+por_data <- coerce_interested_factors(por_data)
+combined_data <- coerce_interested_factors(combined_data)
+```
+
+# Task 2: Summarize the Data (Very Basic EDA)
+
+Look at how the data is stored and see if everything makes sense.
+
+```{r}
+str(combined_data)
+```
+
+The data type of each column is the first point of concern to me. It appears that there are many categorical variables that are shown as characters in the data.
+
+```{r}
+psych::describe(combined_data)
+```
+
+Document the missing values in the data.
+
+```{r}
+colSums(is.na(combined_data))
+```
+
+There does not appear to be any missing data in the combined dataset
+
+## Categorical Variables
+
+Create a one-way contingency table, a two-way contingency table, and a three-way contingency table for some of the factor variables you created previously. Use table() to accomplish this.
+
+– Interpret a number from each resulting table (that is, pick out a value produced and explain what that value means.)
+
+```{r}
+one_way_table <- table(combined_data$reason)
+one_way_table
+```
+
+85 students claimed reputation as their reason to choose this school
+
+```{r}
+two_way_table <- table(combined_data$reason, 
+                       combined_data$studytime)
+two_way_table
+```
+
+46 students who claimed reputation as their reason for the school, spend 2 to 5 hours per week studying
+
+```{r}
+three_way_table <- table(combined_data$reason, 
+                         combined_data$studytime, 
+                         combined_data$romantic)
+three_way_table
+```
+
+33 students who are not in a romantic relationship choose their school based on reputation and study for 2 to 5 hours per week
+
+### Create a conditional two-way table using table().
+
+Subsetting the data and then creating the two-way table
+
+```{r}
+subset_data <- combined_data |> filter(studytime == 2)
+
+cond_table_subset <- table(subset_data$reason, subset_data$romantic)
+
+cond_table_subset
+```
+
+creating a three-way table and subsetting it
+
+```{r}
+three_way_table[, "2", ]
+```
+
+Create a two-way contingency table using group_by() and summarize() from dplyr. Then use pivot_wider() to make the result look more like the output from table().
+
+```{r}
+grouped_table <- combined_data |>
+  group_by(reason, studytime) |>
+  summarize(count = n())
+
+grouped_table |>
+  pivot_wider(names_from = studytime, 
+              values_from = count, 
+              values_fill = 0)
+```
+
+Create a stacked bar graph and a side-by-side bar graph. Give relevant x and y labels, and a title for the plots.
+
+```{r}
+ggplot(grouped_table, 
+       aes(x = reason, y = count, fill = studytime)) +
+  geom_bar(stat = "identity", position = "stack") +
+  labs(title = "Reason & Studytime",
+       x = "Reason",
+       y = "Count") +
+  theme_minimal()
+```
+
+From this view we can more easily see the counts for each reason aggregated across the studytimes. 
+
+```{r}
+ggplot(grouped_table, 
+       aes(x = reason, y = count, fill = studytime)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Reason & Studytime",
+       x = "Reason",
+       y = "Count") +
+  theme_minimal()
+```
+
+In contrast to the stacked bar chart, here we lose some notion of the aggregated totals between each reason, but we can better understand how studytimes compare within a given reason. We can also more readily compare the magnitudes of studytimes across reasons as well.
+
+## Numeric Variables
+
+*age, absences, and the three test grades variables (G1, G2, and G3)*
+
+Find measures of center and spread for three of these variables (including at least one G3 variable)
+
+```{r}
+summarize_numeric_vars <- function(data) {
+  data |>
+    summarize(
+      mean_age = mean(age, na.rm = TRUE),
+      median_age = median(age, na.rm = TRUE),
+      sd_age = sd(age, na.rm = TRUE),
+      mean_absences_mat = mean(absences.x, na.rm = TRUE),
+      median_absences_mat = median(absences.x, na.rm = TRUE),
+      sd_absences_mat = sd(absences.x, na.rm = TRUE),
+      mean_G3_mat = mean(G3.x, na.rm = TRUE), 
+      median_G3_mat = median(G3.x, na.rm = TRUE),
+      sd_G3_mat = sd(G3.x, na.rm = TRUE)
+    )
+}
+```
+
+```{r}
+num_summary <- combined_data |>
+  summarize_numeric_vars()
+
+num_summary 
+```
+
+Repeat while subsetting the data in a meaningful way.
+
+Summary for students studying more than 5 hours per week
+
+```{r}
+num_summary_studiers <- combined_data |>
+  filter(as.numeric(studytime) >= 3) |>
+  summarize_numeric_vars()
+
+num_summary_studiers 
+```
+
+Find measures of center and spread across a single grouping variable for three of these variables (including a G3 variable as one of them)
+
+```{r}
+grouped_romantic_summary <- combined_data |>
+  group_by(romantic) |>
+  summarize_numeric_vars()
+
+grouped_romantic_summary
+```
+
+Find measures of center and spread across two grouping variables for three of these variables (including a G3 variable as one of them)
+
+```{r}
+grouped_summary_romantic_studytime <- combined_data |>
+  group_by(romantic, studytime) |>
+  summarize_numeric_vars()
+
+grouped_summary_romantic_studytime
+```
+
+Create a correlation matrix between all of the numeric variables
+
+```{r}
+numeric_vars <- combined_data |>
+  select(age, absences.x, G1.x, G2.x, G3.x, absences.y, G1.y, G2.y, G3.y)
+
+correlation_matrix <- numeric_vars |> 
+  cor(use = "pairwise.complete.obs")
+
+correlation_matrix
+```
+
+Create a histogram, kernel density plot, and boxplot for two of the numeric variables across one of the categorical variables (that is, create graphs that can compare the distributions across the groups on the same plot (no faceting here)). Add appropriate labels and titles
+
+```{r}
+ggplot(combined_data, 
+       aes(x = G3.x, fill = romantic)) +
+  geom_histogram(position = "dodge", binwidth = 1) +
+  labs(title = "G3 (Math) & Romantic Relationship",
+       x = "G3 (Math)",
+       y = "Count") +
+  theme_minimal()
+```
+
+```{r}
+ggplot(combined_data, 
+       aes(x = G3.x, fill = romantic)) +
+  geom_density(alpha = 0.5) +
+  labs(title = "G3 (Math) & Romantic Relationship",
+       x = "G3 (Math)",
+       y = "Density") +
+  theme_minimal()
+```
+
+```{r}
+ggplot(combined_data, 
+       aes(x = romantic, y = age, fill = romantic)) +
+  geom_boxplot() +
+  labs(title = "Age & Romantic Relationship",
+       x = "Romantic Relationship",
+       y = "Age") +
+  theme_minimal()
+```
+
+Create two scatterplots relating a G3 variable to other numeric variables (put G3 on the y-axis). You should jitter the points if they sit on top of each other. Color the points by a categorical variable in each. Add appropriate labels and titles.
+
+```{r}
+ggplot(combined_data, 
+       aes(x = G3.x, y = age, color = romantic)) +
+  geom_jitter() +
+  labs(title = "Age vs G3 (Math)",
+       x = "G3 (Math Grade)",
+       y = "Age") +
+  theme_minimal()
+```
+
+Will likely need to investigate the many zero's that appear in the G3 scores for legitimacy
+
+```{r}
+ggplot(combined_data, 
+       aes(x = G3.x, y = absences.x, color = studytime)) +
+  geom_jitter() +
+  labs(title = "Absences vs G3 (Math)",
+       x = "G3 (Math)",
+       y = "Absences (Math)") +
+  theme_minimal()
+```
+
+Repeat the scatter plot step but use faceting to obtain graphs at each setting of another categorical variable
+
+```{r}
+ggplot(combined_data, 
+       aes(x = G3.x, y = age)) +
+  geom_jitter(
+    aes(color = romantic)) +
+  facet_wrap(~ romantic) +
+  labs(title = "Age vs G3 (Math) by Romantic Relationship",
+       x = "G3 (Math)",
+       y = "Age") +
+  theme_minimal()
+```
+
+```{r}
+ggplot(combined_data, 
+       aes(x = G3.x, y = absences.x)) +
+  geom_jitter(
+    aes(color = studytime)) +
+  facet_wrap(~ studytime) +
+  labs(title = "Absences vs G3 (Math) by Studytime",
+       x = "G3 (Math)",
+       y = "Absences (Math)") +
+  theme_minimal()
+```
+
+Repeat the scatter plot step but use faceting to obtain graphs at each combination of two categorical variables.
+
+```{r}
+ggplot(combined_data, 
+       aes(x = G3.x, y = age)) +
+  geom_jitter(
+    aes(color = romantic)) +
+  facet_grid(romantic ~ studytime) +  
+  labs(title = "Age vs G3 (Math) by Romantic and Studytime",
+       x = "G3 (Math)",
+       y = "Age") +
+  theme_minimal()
+```
+
+```{r}
+ggplot(combined_data, 
+       aes(x = G3.x, y = absences.x)) +
+  geom_jitter(
+    aes(color = studytime)) +
+  facet_grid(romantic ~ studytime) +  
+  labs(title = "Absences vs G3 (Math) by Romantic and Studytime",
+       x = "G3 (Math)",
+       y = "Absences (Math)") +
+  theme_minimal()
+```
+
